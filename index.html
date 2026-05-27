@@ -23,8 +23,8 @@ body {
   width:100%;
   max-width:420px;
   background:#111827;
-  border:1px solid #1f2937;
   border-radius:16px;
+  border:1px solid #1f2937;
   padding:14px;
 }
 
@@ -36,26 +36,29 @@ body {
 .box {
   margin-top:12px;
   padding:12px;
-  border-radius:12px;
   background:#0f172a;
   border:1px solid #1e293b;
-  min-height:40px;
+  border-radius:12px;
 }
 
-.btn {
-  margin-top:10px;
+button {
   width:100%;
-  padding:10px;
+  margin-top:10px;
+  padding:12px;
   border-radius:10px;
   border:none;
-  cursor:pointer;
-  background:#2563eb;
-  color:white;
   font-weight:bold;
+  cursor:pointer;
 }
 
-.btn:disabled {
-  background:#334155;
+#scanBtn {
+  background:#22c55e;
+  color:black;
+}
+
+#resetBtn {
+  background:#2563eb;
+  color:white;
 }
 
 .status {
@@ -74,25 +77,31 @@ body {
 <h2>SMT Coil Compare</h2>
 
 <div class="card">
+
   <div id="reader"></div>
 
   <div class="box">
-    <div>1️⃣ Перша котушка:</div>
+    <div>1️⃣ Котушка A:</div>
     <div id="coil1">—</div>
   </div>
 
   <div class="box">
-    <div>2️⃣ Друга котушка:</div>
+    <div>2️⃣ Котушка B:</div>
     <div id="coil2">—</div>
   </div>
 
-  <button class="btn" id="resetBtn">Скинути</button>
+  <button id="scanBtn">📷 Scan</button>
+  <button id="resetBtn">🔄 Reset</button>
 
-  <div id="status" class="status info">Скануй першу котушку</div>
+  <div id="status" class="status info">Наведи на котушку і натисни Scan</div>
+
 </div>
 
 <script>
+let scanner
+let lastScan = null
 let step = 1
+
 let coilA = null
 let coilB = null
 
@@ -106,48 +115,56 @@ function reset() {
   step = 1
   coilA = null
   coilB = null
+  lastScan = null
 
   document.getElementById("coil1").innerText = "—"
   document.getElementById("coil2").innerText = "—"
-  setStatus("Скануй першу котушку", "info")
+
+  setStatus("Наведи на котушку і натисни Scan", "info")
 }
 
 document.getElementById("resetBtn").onclick = reset
 
-function onScanSuccess(decodedText) {
-  const qr = decodedText.trim().toUpperCase()
+function startScanner() {
+  scanner = new Html5Qrcode("reader")
 
-  // STEP 1
+  scanner.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 250 },
+    (decodedText) => {
+      lastScan = decodedText.trim().toUpperCase()
+    }
+  )
+}
+
+document.getElementById("scanBtn").onclick = async () => {
+  if (!lastScan) {
+    setStatus("Немає QR в кадрі", "err")
+    return
+  }
+
+  const qr = lastScan
+
   if (step === 1) {
     coilA = qr
     document.getElementById("coil1").innerText = qr
     step = 2
-    setStatus("Підтверди та скануй другу котушку", "info")
-    return
-  }
-
-  // STEP 2
-  if (step === 2) {
+    setStatus("Тепер наведи на другу котушку", "info")
+  } else if (step === 2) {
     coilB = qr
     document.getElementById("coil2").innerText = qr
 
-    // COMPARE
     if (coilA === coilB) {
       setStatus("✔ OK — котушки однакові", "ok")
     } else {
-      setStatus("✖ ERROR — МІКСИНГ! різні котушки", "err")
+      setStatus("✖ ERROR — МІКСИНГ!", "err")
     }
 
     step = 3
   }
 }
 
-const scanner = new Html5QrcodeScanner("reader", {
-  fps: 10,
-  qrbox: 250
-})
-
-scanner.render(onScanSuccess)
+startScanner()
 </script>
 
 </body>
