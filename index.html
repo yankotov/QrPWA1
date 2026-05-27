@@ -1,107 +1,140 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>QR Scanner</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SMT Anti-Mixing Scanner</title>
 
-  <script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
 
-  <style>
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial;
-      background: #0b0f14;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-      padding: 24px;
-    }
+<style>
+body {
+  margin:0;
+  font-family: Arial;
+  background:#0b0f14;
+  color:white;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:20px;
+}
 
-    h1 {
-      font-size: 20px;
-      font-weight: 600;
-      margin: 10px 0 20px;
-      opacity: 0.9;
-    }
+h1 { font-size:18px; opacity:0.9; }
 
-    .scanner-card {
-      width: 100%;
-      max-width: 420px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 18px;
-      padding: 14px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-    }
+.card {
+  width:100%;
+  max-width:420px;
+  background:#111827;
+  border:1px solid #1f2937;
+  border-radius:16px;
+  padding:14px;
+}
 
-    #reader {
-      border-radius: 14px;
-      overflow: hidden;
-    }
+#result {
+  margin-top:12px;
+  padding:12px;
+  border-radius:12px;
+  background:#0f172a;
+  border:1px solid #1e293b;
+  min-height:40px;
+}
 
-    .result {
-      margin-top: 16px;
-      padding: 14px;
-      border-radius: 14px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.08);
-      font-size: 14px;
-      word-break: break-word;
-      min-height: 40px;
-    }
+.status {
+  margin-top:10px;
+  font-weight:bold;
+}
 
-    .label {
-      font-size: 12px;
-      opacity: 0.6;
-      margin-bottom: 6px;
-    }
+.ok { color:#22c55e; }
+.err { color:#ef4444; }
+.warn { color:#f59e0b; }
 
-    .hint {
-      margin-top: 14px;
-      font-size: 12px;
-      opacity: 0.5;
-      text-align: center;
-    }
-  </style>
+</style>
 </head>
 
 <body>
 
-  <h1>QR Scanner</h1>
+<h1>SMT Anti-Mixing Scanner</h1>
 
-  <div class="scanner-card">
-    <div id="reader"></div>
+<div class="card">
+  <div id="reader"></div>
 
-    <div class="label">Результат</div>
-    <div id="result" class="result">Очікування сканування...</div>
-  </div>
+  <div id="result">Очікування скану...</div>
+  <div id="status" class="status"></div>
+</div>
 
-  <div class="hint">
-    Наведи камеру на QR код
-  </div>
+<script>
+/**
+ * MOCK DATABASE (потім замінимо на FastAPI)
+ */
+const activeFeederMap = {
+  "F1": "RES-0402-10K-1%",
+  "F2": "CAP-0402-100nF",
+}
 
-  <script>
-    function onScanSuccess(decodedText) {
-      const el = document.getElementById("result")
-      el.innerText = decodedText
+/**
+ * простий парсер QR
+ */
+function parseQR(text) {
+  return text.trim().toUpperCase()
+}
 
-      // маленький UX ефект
-      el.style.transform = "scale(1.02)"
-      setTimeout(() => el.style.transform = "scale(1)", 150)
+/**
+ * перевірка анти-міксу
+ */
+function checkComponent(qr) {
+  for (const feeder in activeFeederMap) {
+    if (activeFeederMap[feeder] === qr) {
+      return { status: "OK", msg: `Вже використовується в ${feeder}` }
     }
 
-    const scanner = new Html5QrcodeScanner("reader", {
-      fps: 10,
-      qrbox: { width: 240, height: 240 },
-      showTorchButtonIfSupported: true
-    })
+    if (feeder === "F1" && qr.startsWith("RES")) {
+      return { status: "WARN", msg: "Схожий тип резисторів" }
+    }
+  }
 
-    scanner.render(onScanSuccess)
-  </script>
+  return { status: "ERR", msg: "Невідомий або конфліктний компонент!" }
+}
+
+function render(result) {
+  const el = document.getElementById("result")
+  const st = document.getElementById("status")
+
+  el.innerText = result.msg
+
+  st.className = "status"
+
+  if (result.status === "OK") {
+    st.classList.add("ok")
+    st.innerText = "✔ OK"
+  }
+
+  if (result.status === "ERR") {
+    st.classList.add("err")
+    st.innerText = "✖ BLOCKED"
+  }
+
+  if (result.status === "WARN") {
+    st.classList.add("warn")
+    st.innerText = "⚠ WARNING"
+  }
+}
+
+function onScanSuccess(decodedText) {
+  const qr = parseQR(decodedText)
+
+  document.getElementById("result").innerText = qr
+
+  const res = checkComponent(qr)
+  render(res)
+}
+
+const scanner = new Html5QrcodeScanner("reader", {
+  fps: 10,
+  qrbox: 250
+})
+
+scanner.render(onScanSuccess)
+</script>
 
 </body>
 </html>
